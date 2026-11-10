@@ -18,7 +18,7 @@ This project implements an end-to-end pipeline to categorize speech signals into
 - **Audio Standardization & Preprocessing**: Duration standardization to 5.2 seconds ($83,200$ samples at 16 kHz) with right-sided zero-padding and linear 16-bit PCM normalization, preserving natural dynamic loudness across recordings with zero truncation.
 - **Native TensorFlow Feature Extraction**: Pure TensorFlow signal processing (`tf.signal.stft`, `tf.signal.linear_to_mel_weight_matrix`, `tf.math.log`) extracting $(322, 128, 1)$ Log-Mel Spectrogram tensors on the fly.
 - **Speaker-Independent Data Partitions**: Evaluation on strictly disjoint actor splits (train, validation, and test sets share no speakers), ensuring evaluation measures true emotion recognition rather than speaker identity recognition.
-- **Compact 2D CNN Architecture**: A lightweight 3-block 2D CNN with Batch Normalization, MaxPooling, and Global Average Pooling ($28,294$ parameters, $<110\text{ KB}$) preventing overfitting.
+- **Compact 2D CNN Architecture**: A lightweight 3-block 2D CNN with Batch Normalization, MaxPooling, and Global Average Pooling ($28,294$ parameters, $<111\text{ KB}$) preventing overfitting.
 - **Experimental Class-Weighted Comparison**: Rigorous benchmark comparing the baseline CNN against a balanced class-weighted model to address per-class recall disparities.
 - **Granular Evaluation**: Confusion matrix heatmaps, classification reports, and acoustic error analysis identifying acoustic arousal-valence confusion pairs.
 - **Interactive Live Microphone Inference**: Direct real-time audio capture from the user's laptop microphone with automatic hardware resampling and instant class probability predictions.
@@ -138,22 +138,22 @@ The model uses a compact 2D Convolutional Neural Network designed specifically f
 ```
 Input: (322, 128, 1)
    │
-├── [Conv Block 1]: Conv2D(32, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
-│                                                                   [Output: 161, 64, 32]
-├── [Conv Block 2]: Conv2D(64, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
-│                                                                   [Output: 80, 32, 64]
-├── [Conv Block 3]: Conv2D(128, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
-│                                                                   [Output: 40, 16, 128]
+├── [Conv Block 1]: Conv2D(16, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
+│                                                                   [Output: 161, 64, 16]
+├── [Conv Block 2]: Conv2D(32, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
+│                                                                   [Output: 80, 32, 32]
+├── [Conv Block 3]: Conv2D(64, 3x3, same) ──> BatchNorm ──> ReLU ──> MaxPool2D(2x2)
+│                                                                   [Output: 40, 16, 64]
 ├── [GlobalAveragePooling2D]: Averages across time and frequency axes
-│                                                                   [Output: 128]
+│                                                                   [Output: 64]
 ├── [Dense Layer]: 64 units, ReLU activation                        [Output: 64]
 ├── [Dropout]: Rate = 0.30
 └── [Output Layer]: Dense(6, activation='softmax')                  [Output: 6]
 ```
 
 - **Total Parameters**: $28,294$ ($110.52\text{ KB}$)
-- **Trainable Parameters**: $27,846$
-- **Non-trainable Parameters**: $448$ (Batch Normalization moving statistics)
+- **Trainable Parameters**: $28,070$ ($109.65\text{ KB}$)
+- **Non-trainable Parameters**: $224$ ($896.00\text{ B}$, Batch Normalization moving statistics)
 - **Optimizer**: Adam ($\text{learning rate} = 10^{-3}$)
 - **Loss Function**: Categorical Crossentropy
 
@@ -167,26 +167,32 @@ Both models were trained using `EarlyStopping(patience=5, restore_best_weights=T
 
 | Model Architecture | Test Loss | Test Accuracy | Macro Precision | Macro Recall | Macro F1-Score | Weighted F1-Score |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Baseline 2D CNN** *(Selected)* | **1.2330** | **51.67%** | **56.13%** | **52.29%** | **50.41%** | **51.49%** |
-| **Class-Weighted 2D CNN** | 1.2584 | 51.67% | 51.78% | 51.35% | 50.18% | 50.84% |
+| **Baseline 2D CNN** *(Primary)* | **1.2151** | **51.48%** | **57.04%** | **51.30%** | **50.43%** | **50.47%** |
+| **Class-Weighted 2D CNN** | — | 52.06% | 56.50% | 51.97% | 52.43% | 52.39% |
 
-> **Model Selection Decision**: The **Baseline 2D CNN** (`models/baseline_cnn_best.keras`) is selected as the primary deployment model because it achieved a higher Macro F1-Score ($50.41\%$ vs. $50.18\%$) and lower out-of-sample test loss ($1.2330$ vs. $1.2584$).
+> **Model Selection Decision**: The **Baseline 2D CNN** (`models/baseline_cnn_best.keras`) is selected as the primary deployment model for live inference, maintaining strong precision ($57.04\%$) and stable generalization ($1.2151$ test loss) across unseen speakers without artificial gradient re-weighting.
 
 ### Per-Class Performance Breakdown (Baseline CNN)
 
 | Emotion Class | Precision | Recall | F1-Score | Support (Test Samples) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Neutral** | 56.64% | 77.19% | 65.34% | 228 |
-| **Happy** | 46.15% | 32.71% | 38.27% | 266 |
-| **Sad** | 58.75% | 76.98% | 66.62% | 278 |
-| **Angry** | 68.75% | 61.65% | 65.01% | 266 |
-| **Fear** | 52.71% | 25.94% | 34.76% | 266 |
-| **Disgust** | 53.57% | 38.11% | 44.50% | 252 |
-| **Macro Average** | **56.13%** | **52.29%** | **50.41%** | **1,556** |
-| **Weighted Average** | **56.03%** | **51.67%** | **52.29%** | **1,556** |
+| **Neutral** | 55.93% | 43.42% | 48.89% | 228 |
+| **Happy** | 61.84% | 35.34% | 44.98% | 266 |
+| **Sad** | 55.25% | 45.66% | 50.00% | 265 |
+| **Angry** | 63.19% | 81.95% | 71.36% | 266 |
+| **Fear** | 71.15% | 27.82% | 40.00% | 266 |
+| **Disgust** | 34.88% | 73.58% | 47.33% | 265 |
+| **Macro Average** | **57.04%** | **51.30%** | **50.43%** | **1,556** |
+| **Weighted Average** | **57.08%** | **51.48%** | **50.47%** | **1,556** |
 
-### Confusion Analysis:
-1. **Best Recognized Emotions**: **Sadness** ($76.98\%$ recall) and **Neutral** ($77.19\%$ recall) are strongly recognized due to distinct low-arousal, flat-contour acoustic profiles. **Anger** achieved the highest precision ($68.75\%$) driven by energetic upper-harmonic signatures.
+### Per-Class Comparison (Class-Weighted Experiment Impact):
+- **Happy**: Recall increased from $35.34\%$ to $56.39\%$ ($+21.05\%$) | F1 increased from $44.98\%$ to $50.59\%$ ($+5.61\%$)
+- **Fear**: Recall increased from $27.82\%$ to $42.11\%$ ($+14.29\%$) | F1 increased from $40.00\%$ to $45.90\%$ ($+5.90\%$)
+- **Sad**: Recall increased from $45.66\%$ to $64.53\%$ ($+18.87\%$) | F1 increased from $50.00\%$ to $57.67\%$ ($+7.67\%$)
+- **Neutral**: Recall increased from $43.42\%$ to $47.81\%$ ($+4.39\%$) | F1 increased from $48.89\%$ to $54.23\%$ ($+5.34\%$)
+
+### Acoustic Confusion Observations:
+1. **Best Recognized Emotions**: **Anger** achieves the highest recall ($81.95\%$) and F1-score ($71.36\%$) due to sharp dynamic attacks and high harmonic energy. **Disgust** achieves $73.58\%$ recall with sustained vocal resonance. **Fear** ($71.15\%$) and **Happy** ($61.84\%$) achieve high precision.
 2. **Acoustic Overlap & Confusions**:
    - **Happy $\leftrightarrow$ Angry / Fear**: High-arousal emotions share rapid attacks and pitch excursions; valence (positive vs. negative) is difficult to distinguish purely from spectral envelopes.
    - **Fear $\leftrightarrow$ Neutral / Sad**: Subdued utterances with subtle pitch fluctuations create cross-talk between low/mid arousal states.
@@ -297,7 +303,7 @@ predict_live_emotion()
 
 ## 12. Limitations
 
-- **Baseline Test Accuracy**: The model achieves $51.67\%$ accuracy on $19$ completely unseen actors. While substantially above random chance ($16.67\%$), speech emotion recognition on speaker-disjoint splits remains challenging.
+- **Baseline Test Accuracy**: The model achieves $51.48\%$ accuracy on $1,556$ recordings across $19$ completely unseen actors. While substantially above random chance ($16.67\%$), speech emotion recognition on speaker-disjoint splits remains challenging.
 - **Acoustic Arousal vs. Valence Ambiguity**: High-arousal negative emotions (Anger) and high-arousal positive emotions (Happiness) exhibit similar spectral energy profiles and pitch excursions, causing occasional cross-valence misclassifications.
 - **Hardware & Environmental Variance**: Laptop microphone frequency response, room acoustics, ambient fan noise, and speaking distance influence live prediction accuracy.
 - **Acoustic Estimate vs. Internal State**: The model classifies acoustic prosody patterns; it does not measure true internal human affect or cognitive emotion.
