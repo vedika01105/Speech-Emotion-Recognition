@@ -27,3 +27,6 @@ seaborn>=0.13.2
 # Jupyter Notebook & Kernel Execution
 ipykernel>=6.29.0
 notebook>=7.2.0
+
+# Web Application Interface
+streamlit>=1.40.0
